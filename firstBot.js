@@ -7,8 +7,7 @@ const bot = mineflayer.createBot({
 })
 
 const welcome = () => {
-	bot.chat('wooow!')
+	bot.chat('HOWDY!')
 }
 
 bot.on('spawn', welcome)
-//woof
