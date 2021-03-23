@@ -1,9 +1,10 @@
 // Create your bot
 const mineflayer = require("mineflayer");
 const bot = mineflayer.createBot({
-	host: 'localhost',
-	port: 64279,
-	username: 'slurp'
+	host: 'roller.cse.taylor.edu',
+    //localhost if on LAN
+    //port: 64279,
+	username: 'The Slurp'
 })
 // Load your dependency plugins.
 bot.loadPlugin(require('mineflayer-pathfinder').pathfinder);
@@ -16,7 +17,11 @@ const {
     BehaviorFollowEntity,
     BehaviorLookAtEntity,
     BehaviorGetClosestEntity,
-    NestedStateMachine } = require("mineflayer-statemachine");
+    NestedStateMachine, 
+    BehaviorFindBlock,
+    StateMachineWebserver,
+    BehaviorMineBlock,
+    BehaviorInteractBlock} = require("mineflayer-statemachine");
     
 // wait for our bot to login.
 bot.once("spawn", () =>
@@ -28,12 +33,29 @@ bot.once("spawn", () =>
     const getClosestPlayer = new BehaviorGetClosestEntity(bot, targets, EntityFilters().PlayersOnly);
     const followPlayer = new BehaviorFollowEntity(bot, targets);
     const lookAtPlayer = new BehaviorLookAtEntity(bot, targets);
-
+    const getClosestCow = new BehaviorGetClosestEntity(bot, targets, EntityFilters().MobsOnly)
+    const followCow = new BehaviorFollowEntity(bot, targets);
+    const findWood = new BehaviorFindBlock (bot, targets)
     // Create our transitions
     const transitions = [
+        //find closest mob
+      
+        new StateTransition({
+            parent: getClosestCow,
+            child: followCow,
+            shouldTransition: () => true,
+        }),
 
-        // We want to start following the player immediately after finding them.
+        //go to that mob, when it is within 1 block, leave to the nearest player
+
+        new StateTransition({
+            parent: followCow,
+            child: getClosestPlayer,
+            shouldTransition: () => followCow.distanceToTarget() <= 1,
+        }),
+          // We want to start following the player immediately after finding them.
         // Since getClosestPlayer finishes instantly, shouldTransition() should always return true.
+        
         new StateTransition({
             parent: getClosestPlayer,
             child: followPlayer,
@@ -58,11 +80,18 @@ bot.once("spawn", () =>
     ];
 
     // Now we just wrap our transition list in a nested state machine layer. We want the bot
-    // to start on the getClosestPlayer state, so we'll specify that here.
-    const rootLayer = new NestedStateMachine(transitions, getClosestPlayer);
+    // to start on the getClosestCow state, so we'll specify that here.
+    const rootLayer = new NestedStateMachine(transitions, getClosestCow);
     
     // We can start our state machine simply by creating a new instance.
     new BotStateMachine(bot, rootLayer);
+
+    const stateMachine = new BotStateMachine(bot, rootLayer);
+
+
+    const port = 8080;
+    const webserver = new StateMachineWebserver(bot, stateMachine, port);
+    webserver.startServer();
 
 
 });
