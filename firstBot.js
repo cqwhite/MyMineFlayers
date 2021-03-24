@@ -1,13 +1,19 @@
 // Create your bot
 const mineflayer = require("mineflayer");
 const bot = mineflayer.createBot({
-	host: 'roller.cse.taylor.edu',
-    //localhost if on LAN
-    //port: 64279,
-	username: 'The Slurp'
+//	host: 'roller.cse.taylor.edu',
+    //if LAN
+ // host: 'locahost',
+  port: 63189,
+	username: 'Thes ssssrep'
 })
 // Load your dependency plugins.
 bot.loadPlugin(require('mineflayer-pathfinder').pathfinder);
+
+let mcData
+bot.on('inject_allowed', () => {
+  mcData = require('minecraft-data')(bot.version)
+})
 
 // Import required behaviors.
 const {
@@ -21,8 +27,79 @@ const {
     BehaviorFindBlock,
     StateMachineWebserver,
     BehaviorMineBlock,
+    BehaviorPlaceBlock,
     BehaviorInteractBlock} = require("mineflayer-statemachine");
-    
+
+    let nowFishing = false
+    function onCollect (player, entity) {
+      if (entity.kind === 'Drops' && player === bot.entity) {
+        bot.removeListener('playerCollect', onCollect)
+        startFishing()
+      }
+    }
+
+
+    const startfishState = (function(){
+      function FishState(bot)
+      {
+          this.bot = bot;
+          this.active = false;
+          this.stateName = 'FishState';
+      }
+  
+      FishState.prototype.onStateEntered = function () {
+          console.log(`${bot.username} has entered the ${this.stateName} state.`);
+          bot.chat('Fishing')
+          bot.equip(mcData.itemsByName.fishing_rod.id, 'hand', (err) => {
+            if (err) {
+              return bot.chat(err.message)
+            }
+        
+            nowFishing = true
+            bot.on('playerCollect', onCollect)
+        
+            bot.fish((err) => {
+              nowFishing = false
+        
+              if (err) {
+                bot.chat(err.message)
+              }
+            })
+          })
+          
+      };
+      FishState.prototype.onStateExited = function () {
+          console.log(`${bot.username} has left the ${this.stateName} state.`);
+      };
+  
+      return FishState;
+  }());
+
+  const stopfishState = (function(){
+    function StopFishState(bot)
+    {
+        this.bot = bot;
+        this.active = false;
+        this.stateName = 'StopFishState';
+    }
+
+    StopFishState.prototype.onStateEntered = function () {
+        console.log(`${bot.username} has entered the ${this.stateName} state.`);
+        bot.removeListener('playerCollect', onCollect)
+
+        if (nowFishing) {
+          bot.activateItem()
+        }
+        
+    };
+    StopFishState.prototype.onStateExited = function () {
+        console.log(`${bot.username} has left the ${this.stateName} state.`);
+    };
+
+    return StopFishState;
+}());
+
+      
 // wait for our bot to login.
 bot.once("spawn", () =>
 {
@@ -33,9 +110,12 @@ bot.once("spawn", () =>
     const getClosestPlayer = new BehaviorGetClosestEntity(bot, targets, EntityFilters().PlayersOnly);
     const followPlayer = new BehaviorFollowEntity(bot, targets);
     const lookAtPlayer = new BehaviorLookAtEntity(bot, targets);
-    const getClosestCow = new BehaviorGetClosestEntity(bot, targets, EntityFilters().MobsOnly)
+    const getClosestCow = new BehaviorGetClosestEntity(bot, targets, EntityFilters().MobsOnly);
     const followCow = new BehaviorFollowEntity(bot, targets);
-    const findWood = new BehaviorFindBlock (bot, targets)
+    const getClosestItem = new BehaviorGetClosestEntity(bot, targets, EntityFilters().ItemDrops);
+    const followItem = new BehaviorFollowEntity(bot, targets);
+    const startFishing = new startfishState(bot, targets);
+    const stopFishing = new stopfishState(bot, targets);
     // Create our transitions
     const transitions = [
         //find closest mob
@@ -45,14 +125,38 @@ bot.once("spawn", () =>
             child: followCow,
             shouldTransition: () => true,
         }),
-
         //go to that mob, when it is within 1 block, leave to the nearest player
-
+        
         new StateTransition({
             parent: followCow,
-            child: getClosestPlayer,
-            shouldTransition: () => followCow.distanceToTarget() <= 1,
+            child: getClosestItem,
+            shouldTransition: () => followCow.distanceToTarget() <= 3,
         }),
+        //get closest item time
+        new StateTransition({
+          parent: getClosestItem,
+          child: followItem,
+          shouldTransition: () => true,
+      }),
+
+      new StateTransition({
+        parent: followItem,
+        child: startFishing,
+        shouldTransition: () => followItem.distanceToTarget() <= 3,
+    }),
+    //fishing time
+    new StateTransition({
+      parent: startFishing,
+      child: stopFishing,
+      shouldTransition: () => bot.health <= 8,
+  }),
+
+  new StateTransition({
+    parent: stopFishing,
+    child: getClosestPlayer,
+    shouldTransition: () => true,
+}),
+
           // We want to start following the player immediately after finding them.
         // Since getClosestPlayer finishes instantly, shouldTransition() should always return true.
         
@@ -61,6 +165,8 @@ bot.once("spawn", () =>
             child: followPlayer,
             shouldTransition: () => true,
         }),
+
+        
 
         // If the distance to the player is less than two blocks, switch from the followPlayer
         // state to the lookAtPlayer state.
