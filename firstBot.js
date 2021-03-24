@@ -4,11 +4,15 @@ const bot = mineflayer.createBot({
 //	host: 'roller.cse.taylor.edu',
     //if LAN
  // host: 'locahost',
-  port: 63189,
-	username: 'Thes ssssrep'
+  port: 60343,
+	username: 'The Slurpsss'
 })
+
+const { performance } = require('perf_hooks')
 // Load your dependency plugins.
 bot.loadPlugin(require('mineflayer-pathfinder').pathfinder);
+const minecraftHawkEye = require('minecrafthawkeye')
+
 
 let mcData
 bot.on('inject_allowed', () => {
@@ -99,6 +103,74 @@ const {
     return StopFishState;
 }());
 
+const findrockstate = (function(){
+  function FindRockState(bot)
+  {
+      this.bot = bot;
+      this.active = false;
+      this.stateName = 'FindRockState';
+  }
+
+  FindRockState.prototype.onStateEntered = function () {
+      console.log(`${bot.username} has entered the ${this.stateName} state.`);
+
+      const name = 'stone'
+        if (mcData.blocksByName[name] === undefined) {
+          bot.chat(`${name} is not a block name`)
+          return
+        }
+        const ids = [mcData.blocksByName[name].id]
+    
+        const startTime = performance.now()
+        const blocks = bot.findBlocks({ matching: ids, maxDistance: 128, count: 10 })
+        const time = (performance.now() - startTime).toFixed(2)
+    
+        bot.chat(`I found ${blocks.length} ${name} blocks in ${time} ms`)   
+      
+  };
+  FindRockState.prototype.onStateExited = function () {
+      console.log(`${bot.username} has left the ${this.stateName} state.`);
+  };
+
+  return FindRockState;
+}());
+
+const hawkeyebotstate = (function(){
+  function HawkeyeBotState(bot)
+  {
+      this.bot = bot;
+      this.active = false;
+      this.stateName = 'HawkeyeBotState';
+  }
+
+  HawkeyeBotState.prototype.onStateEntered = function () {
+      console.log(`${bot.username} has entered the ${this.stateName} state.`);
+
+        bot.chat('/give ' + bot.username + ' bow{Enchantments:[{id:unbreaking,lvl:100}]} 1')
+          bot.chat('/give ' + bot.username + ' minecraft:arrow 300')
+          bot.chat('/time set day')
+          bot.chat('/kill @e[type=minecraft:arrow]')
+
+          bot.chat('Ready!')
+
+          // Get target for block position, use whatever you need
+          const target = bot.hawkEye.
+          console.log(target)
+          if (!target) {
+            return false
+          }
+
+          // Auto attack every 1,2 secs until target is dead or is to far away
+          bot.hawkEye.autoAttack(target)
+      
+  };
+  HawkeyeBotState.prototype.onStateExited = function () {
+      console.log(`${bot.username} has left the ${this.stateName} state.`);
+  };
+
+  return HawkeyeBotState;
+}());
+
       
 // wait for our bot to login.
 bot.once("spawn", () =>
@@ -116,6 +188,8 @@ bot.once("spawn", () =>
     const followItem = new BehaviorFollowEntity(bot, targets);
     const startFishing = new startfishState(bot, targets);
     const stopFishing = new stopfishState(bot, targets);
+    const findBlock = new findrockstate(bot, targets);
+    const hawkEyeMode = new hawkeyebotstate(bot, targets);
     // Create our transitions
     const transitions = [
         //find closest mob
@@ -137,25 +211,31 @@ bot.once("spawn", () =>
           parent: getClosestItem,
           child: followItem,
           shouldTransition: () => true,
-      }),
+        }),
 
-      new StateTransition({
-        parent: followItem,
-        child: startFishing,
-        shouldTransition: () => followItem.distanceToTarget() <= 3,
-    }),
+          new StateTransition({
+            parent: followItem,
+            child: startFishing,
+            shouldTransition: () => followItem.distanceToTarget() <= 1,
+        }),
     //fishing time
-    new StateTransition({
-      parent: startFishing,
-      child: stopFishing,
-      shouldTransition: () => bot.health <= 8,
-  }),
+          new StateTransition({
+            parent: startFishing,
+            child: stopFishing,
+            shouldTransition: () => bot.health <= 8,
+        }),
 
-  new StateTransition({
-    parent: stopFishing,
-    child: getClosestPlayer,
-    shouldTransition: () => true,
-}),
+          new StateTransition({
+            parent: stopFishing,
+            child: findBlock,
+            shouldTransition: () => true,
+          }),
+
+          new StateTransition({
+            parent: findBlock,
+            child: getClosestPlayer,
+            shouldTransition: () => true,
+          }),
 
           // We want to start following the player immediately after finding them.
         // Since getClosestPlayer finishes instantly, shouldTransition() should always return true.
