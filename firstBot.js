@@ -1,10 +1,10 @@
 // Create your bot
 const mineflayer = require("mineflayer");
 const bot = mineflayer.createBot({
-//	host: 'roller.cse.taylor.edu',
+	host: 'roller.cse.taylor.edu',
     //if LAN
  // host: 'locahost',
-  port: 60343,
+ // port: 60343,
 	username: 'The Slurpsss'
 })
 
